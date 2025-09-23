@@ -7,8 +7,6 @@ import { useMatchData } from '../hooks/use-match-data';
 
 const HomePage: React.FC = () => {
   const {
-    homeTeams,
-    awayTeams,
     selectedHomeTeam,
     selectedAwayTeam,
     selectedBTTS,
@@ -19,11 +17,7 @@ const HomePage: React.FC = () => {
     setSelectedComeback,
     applyFilters,
     resetFilters,
-    exportToCSV,
-    startDate,
-    endDate,
-    setStartDate,
-    setEndDate
+    exportToCSV
   } = useMatchData();
 
   return (
@@ -38,8 +32,6 @@ const HomePage: React.FC = () => {
       </div>
 
       <FilterSection 
-        homeTeams={homeTeams}
-        awayTeams={awayTeams}
         selectedHomeTeam={selectedHomeTeam}
         selectedAwayTeam={selectedAwayTeam}
         selectedBTTS={selectedBTTS}
@@ -51,10 +43,6 @@ const HomePage: React.FC = () => {
         onApplyFilters={applyFilters}
         onResetFilters={resetFilters}
         onExportCSV={exportToCSV}
-        startDate={startDate}
-        endDate={endDate}
-        onStartDateChange={setStartDate}
-        onEndDateChange={setEndDate}
       />
 
       <div className="mt-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

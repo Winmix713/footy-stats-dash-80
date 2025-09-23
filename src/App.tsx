@@ -6,7 +6,6 @@ import { Footer } from './components/footer';
 import { BackgroundEffects } from './components/background-effects';
 import { LoadingOverlay } from './components/loading-overlay';
 import { MobileNav } from './components/mobile-nav';
-import { FilterSection } from './components/filter-section';
 import { StatsSection } from './components/stats-section';
 import { ResultsSection } from './components/results-section';
 import { ExtendedStatsModal } from './components/extended-stats-modal';
@@ -23,8 +22,6 @@ const App: React.FC = () => {
     isLoading,
     matches,
     filteredMatches,
-    homeTeams,
-    awayTeams,
     selectedHomeTeam,
     selectedAwayTeam,
     selectedBTTS,
@@ -47,10 +44,6 @@ const App: React.FC = () => {
     setSortDirection,
     isExtendedStatsModalOpen,
     setIsExtendedStatsModalOpen,
-    startDate,
-    endDate,
-    setStartDate,
-    setEndDate,
   } = useMatchData();
 
   return (

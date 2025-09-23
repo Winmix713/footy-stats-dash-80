@@ -5,11 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Search, Users, Trophy, RotateCcw } from 'lucide-react';
+import { spanishTeams } from '../data/spanish-teams';
 
 interface FilterPanelProps {
   params: any;
   updateParams: (params: any) => void;
-  teams: string[];
   analyzeTeams: (homeTeam: string, awayTeam: string) => void;
   searchTeam: (team: string) => void;
   clearFilters: () => void;
@@ -19,7 +19,6 @@ interface FilterPanelProps {
 export const FilterPanel = ({ 
   params, 
   updateParams, 
-  teams, 
   analyzeTeams, 
   searchTeam,
   clearFilters,
@@ -70,9 +69,9 @@ export const FilterPanel = ({
                   <SelectValue placeholder="Válasszon hazai csapatot" />
                 </SelectTrigger>
                 <SelectContent>
-                  {teams.map((team) => (
-                    <SelectItem key={team} value={team}>
-                      {team}
+                  {spanishTeams.map((team) => (
+                    <SelectItem key={team.id} value={team.name}>
+                      {team.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -85,9 +84,9 @@ export const FilterPanel = ({
                   <SelectValue placeholder="Válasszon vendég csapatot" />
                 </SelectTrigger>
                 <SelectContent>
-                  {teams.map((team) => (
-                    <SelectItem key={team} value={team}>
-                      {team}
+                  {spanishTeams.map((team) => (
+                    <SelectItem key={team.id} value={team.name}>
+                      {team.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -124,9 +123,9 @@ export const FilterPanel = ({
                 <SelectValue placeholder="Válasszon keresendő csapatot" />
               </SelectTrigger>
               <SelectContent>
-                {teams.map((team) => (
-                  <SelectItem key={team} value={team}>
-                    {team}
+                {spanishTeams.map((team) => (
+                  <SelectItem key={team.id} value={team.name}>
+                    {team.name}
                   </SelectItem>
                 ))}
               </SelectContent>

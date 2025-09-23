@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo } from 'react';
-import { Button, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Autocomplete, AutocompleteItem, Input } from '@heroui/react';
+import { Button, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Autocomplete, AutocompleteItem } from '@heroui/react';
 import { Icon } from '@iconify/react';
-import { Team } from '../types/match';
+import { spanishTeams } from '../data/spanish-teams';
 
 interface ColorScheme {
   primary: string;
@@ -11,25 +11,17 @@ interface ColorScheme {
 }
 
 interface FilterSectionProps {
-  homeTeams: Team[];
-  awayTeams: Team[];
-  selectedHomeTeam: Team | null;
-  selectedAwayTeam: Team | null;
+  selectedHomeTeam: { id: string; name: string } | null;
+  selectedAwayTeam: { id: string; name: string } | null;
   selectedBTTS: boolean | null;
   selectedComeback: boolean | null;
-  onHomeTeamChange: (team: Team | null) => void;
-  onAwayTeamChange: (team: Team | null) => void;
+  onHomeTeamChange: (team: { id: string; name: string } | null) => void;
+  onAwayTeamChange: (team: { id: string; name: string } | null) => void;
   onBTTSChange: (value: boolean | null) => void;
   onComebackChange: (value: boolean | null) => void;
   onApplyFilters: () => void;
   onResetFilters: () => void;
   onExportCSV: () => void;
-  
-  // Date range filtering
-  startDate: string;
-  endDate: string;
-  onStartDateChange: (date: string) => void;
-  onEndDateChange: (date: string) => void;
   
   // New enhancement props
   colorScheme?: ColorScheme;
@@ -67,8 +59,6 @@ const defaultLabels = {
   awayTeam: 'Vendég csapat',
   btts: 'Mindkét csapat gólt szerzett',
   comeback: 'Fordítás történt',
-  startDate: 'Kezdő dátum',
-  endDate: 'Záró dátum',
   search: 'Keresés...',
   selectAny: '-- Bármelyik --',
   yes: 'Igen',
@@ -85,8 +75,6 @@ const defaultColorScheme: ColorScheme = {
 };
 
 export const FilterSection: React.FC<FilterSectionProps> = ({
-  homeTeams,
-  awayTeams,
   selectedHomeTeam,
   selectedAwayTeam,
   selectedBTTS,
@@ -98,55 +86,21 @@ export const FilterSection: React.FC<FilterSectionProps> = ({
   onApplyFilters,
   onResetFilters,
   onExportCSV,
-  startDate,
-  endDate,
-  onStartDateChange,
-  onEndDateChange,
   colorScheme = defaultColorScheme,
   disabled = false,
   loading = false,
   onError,
   labels = defaultLabels
 }) => {
-  // Date validation utility
-  const isValidDate = useCallback((dateString: string): boolean => {
-    if (!dateString) return true; // Empty dates are valid (no filter)
-    const date = new Date(dateString);
-    return !isNaN(date.getTime()) && !!dateString.match(/^\d{4}-\d{2}-\d{2}$/);
-  }, []);
-
-  // Validate date range
-  const isValidDateRange = useMemo(() => {
-    if (!startDate || !endDate) return true;
-    if (!isValidDate(startDate) || !isValidDate(endDate)) return false;
-    return new Date(startDate) <= new Date(endDate);
-  }, [startDate, endDate, isValidDate]);
-
-  // Enhanced filter application with validation
+  // Enhanced filter application
   const handleApplyFilters = useCallback(() => {
     try {
-      // Validate dates
-      if (!isValidDate(startDate)) {
-        onError?.('Érvénytelen kezdő dátum formátum!');
-        return;
-      }
-      
-      if (!isValidDate(endDate)) {
-        onError?.('Érvénytelen záró dátum formátum!');
-        return;
-      }
-      
-      if (!isValidDateRange) {
-        onError?.('A kezdő dátum nem lehet későbbi a záró dátumnál!');
-        return;
-      }
-      
       onApplyFilters();
     } catch (error) {
       onError?.('Hiba történt a szűrők alkalmazásakor');
       console.error('Filter application error:', error);
     }
-  }, [startDate, endDate, isValidDate, isValidDateRange, onApplyFilters, onError]);
+  }, [onApplyFilters, onError]);
 
   // Enhanced reset with confirmation
   const handleResetFilters = useCallback(() => {
@@ -174,7 +128,7 @@ export const FilterSection: React.FC<FilterSectionProps> = ({
       if (key === null) {
         onHomeTeamChange(null);
       } else {
-        const team = homeTeams.find(t => t.id === key);
+        const team = spanishTeams.find(t => t.id === key);
         if (team) {
           onHomeTeamChange(team);
         } else {
@@ -185,14 +139,14 @@ export const FilterSection: React.FC<FilterSectionProps> = ({
       onError?.('Hiba történt a hazai csapat kiválasztásakor');
       console.error('Home team selection error:', error);
     }
-  }, [homeTeams, onHomeTeamChange, onError]);
+  }, [onHomeTeamChange, onError]);
 
   const handleAwayTeamChange = useCallback((key: React.Key | null) => {
     try {
       if (key === null) {
         onAwayTeamChange(null);
       } else {
-        const team = awayTeams.find(t => t.id === key);
+        const team = spanishTeams.find(t => t.id === key);
         if (team) {
           onAwayTeamChange(team);
         } else {
@@ -203,7 +157,7 @@ export const FilterSection: React.FC<FilterSectionProps> = ({
       onError?.('Hiba történt a vendég csapat kiválasztásakor');
       console.error('Away team selection error:', error);
     }
-  }, [awayTeams, onAwayTeamChange, onError]);
+  }, [onAwayTeamChange, onError]);
 
   return (
     <div className={`mt-8 ring-1 ${colorScheme.border} ${colorScheme.background} rounded-2xl backdrop-blur ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -220,7 +174,7 @@ export const FilterSection: React.FC<FilterSectionProps> = ({
             color="primary"
             className={`inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-white bg-gradient-to-br ${colorScheme.primary} rounded-full px-4 py-2.5 shadow-lg hover:shadow-[0_12px_24px_-6px_rgba(139,92,246,0.4)] hover:-translate-y-0.5 transform-gpu transition disabled:opacity-50 disabled:cursor-not-allowed`}
             onPress={handleApplyFilters}
-            isDisabled={disabled || loading || !isValidDateRange}
+            isDisabled={disabled || loading}
             aria-label={`${labels.apply} - Apply selected filters`}
           >
             <Icon icon="lucide:sliders-horizontal" width={18} height={18} />
@@ -262,7 +216,7 @@ export const FilterSection: React.FC<FilterSectionProps> = ({
               aria-labelledby="home-team-label"
               aria-describedby="home-team-description"
               className={`w-full rounded-xl ${colorScheme.background} ring-1 ${colorScheme.border} hover:bg-white/10`}
-              defaultItems={homeTeams}
+              defaultItems={spanishTeams}
               placeholder={labels.search}
               selectedKey={selectedHomeTeam?.id}
               onSelectionChange={handleHomeTeamChange}
@@ -312,7 +266,7 @@ export const FilterSection: React.FC<FilterSectionProps> = ({
               aria-labelledby="away-team-label"
               aria-describedby="away-team-description"
               className={`w-full rounded-xl ${colorScheme.background} ring-1 ${colorScheme.border} hover:bg-white/10`}
-              defaultItems={awayTeams}
+              defaultItems={spanishTeams}
               placeholder={labels.search}
               selectedKey={selectedAwayTeam?.id}
               onSelectionChange={handleAwayTeamChange}
@@ -460,59 +414,6 @@ export const FilterSection: React.FC<FilterSectionProps> = ({
           </div>
         </div>
 
-        {/* Date Range Filter */}
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs text-zinc-400 mb-1.5" id="start-date-label">
-              {labels.startDate}
-            </label>
-            <Input
-              aria-labelledby="start-date-label"
-              aria-describedby="start-date-description"
-              type="date"
-              className={`w-full rounded-xl ${colorScheme.background} ring-1 ${colorScheme.border} hover:bg-white/10`}
-              value={startDate}
-              onValueChange={onStartDateChange}
-              isDisabled={disabled || loading}
-              isInvalid={startDate !== '' && !isValidDate(startDate)}
-              errorMessage={startDate !== '' && !isValidDate(startDate) ? "Érvénytelen dátum formátum" : ""}
-              startContent={
-                <Icon icon="lucide:calendar" className="text-zinc-400" width={16} height={16} />
-              }
-            />
-            <div id="start-date-description" className="sr-only">
-              Select start date for filtering matches
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-zinc-400 mb-1.5" id="end-date-label">
-              {labels.endDate}
-            </label>
-            <Input
-              aria-labelledby="end-date-label"
-              aria-describedby="end-date-description"
-              type="date"
-              className={`w-full rounded-xl ${colorScheme.background} ring-1 ${colorScheme.border} hover:bg-white/10`}
-              value={endDate}
-              onValueChange={onEndDateChange}
-              isDisabled={disabled || loading}
-              isInvalid={endDate !== '' && (!isValidDate(endDate) || !isValidDateRange)}
-              errorMessage={
-                endDate !== '' && !isValidDate(endDate) 
-                  ? "Érvénytelen dátum formátum" 
-                  : endDate !== '' && !isValidDateRange 
-                    ? "A záró dátum nem lehet korábbi a kezdő dátumnál" 
-                    : ""
-              }
-              startContent={
-                <Icon icon="lucide:calendar" className="text-zinc-400" width={16} height={16} />
-              }
-            />
-            <div id="end-date-description" className="sr-only">
-              Select end date for filtering matches
-            </div>
-          </div>
-        </div>
 
         {/* Mobile buttons */}
         <div className="mt-4 flex sm:hidden items-center gap-3">
@@ -520,7 +421,7 @@ export const FilterSection: React.FC<FilterSectionProps> = ({
             color="primary"
             className={`inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-white bg-gradient-to-br ${colorScheme.primary} rounded-full px-4 py-2.5 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed`}
             onPress={handleApplyFilters}
-            isDisabled={disabled || loading || !isValidDateRange}
+            isDisabled={disabled || loading}
             aria-label={`${labels.apply} - Apply selected filters`}
           >
             <Icon icon="lucide:sliders-horizontal" width={18} height={18} />
