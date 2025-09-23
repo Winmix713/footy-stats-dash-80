@@ -1,15 +1,16 @@
-@import "tailwindcss";
-@config "../tailwind.config.ts";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 
-@utility scrollbar-hidden {
-  &::-webkit-scrollbar {
+@layer utilities {
+  .scrollbar-hidden::-webkit-scrollbar {
     display: none;
   }
-}
-
-@utility animate-spin {
-  animation: spin 1s linear infinite;
+  
+  .animate-spin {
+    animation: spin 1s linear infinite;
+  }
 }
 
 @keyframes spin {
