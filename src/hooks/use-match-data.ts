@@ -1,38 +1,100 @@
-import React from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { Match, Team, MatchStats, SortKey, SortDirection } from '../types/match';
 import { addToast } from '@heroui/react';
+import { supabase, fetchMatches, checkSupabaseConnection, MatchFilters as SupabaseMatchFilters } from '../lib/supabase';
 import { mockMatches } from '../data/mock-data';
-import { createClient } from '@supabase/supabase-js';
 
-// Update Supabase constants to match documentation
-const STORAGE_KEY = 'winmix_filters_v2';
-const SUPABASE_URL = 'https://tssgzrzjxslvqmpxgsss.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzc2d6cnpqeHNsdnFtcHhnc3NzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ4NDQ0NzksImV4cCI6MjA3MDQyMDQ3OX0.x3dwO-gt7bp4-uM-lMktVxFdu-RaRgN8N5DM8-mqofI';
+// Create a context for match data
+interface MatchDataContextType {
+  isLoading: boolean;
+  matches: Match[];
+  filteredMatches: Match[];
+  homeTeams: Team[];
+  awayTeams: Team[];
+  selectedHomeTeam: Team | null;
+  selectedAwayTeam: Team | null;
+  selectedBTTS: boolean | null;
+  selectedComeback: boolean | null;
+  setSelectedHomeTeam: (team: Team | null) => void;
+  setSelectedAwayTeam: (team: Team | null) => void;
+  setSelectedBTTS: (value: boolean | null) => void;
+  setSelectedComeback: (value: boolean | null) => void;
+  applyFilters: () => void;
+  resetFilters: () => void;
+  exportToCSV: () => void;
+  stats: MatchStats;
+  currentPage: number;
+  itemsPerPage: number;
+  setCurrentPage: (page: number) => void;
+  setItemsPerPage: (count: number) => void;
+  sortKey: SortKey;
+  sortDirection: SortDirection;
+  setSortKey: (key: SortKey) => void;
+  setSortDirection: (direction: SortDirection) => void;
+  isExtendedStatsModalOpen: boolean;
+  setIsExtendedStatsModalOpen: (isOpen: boolean) => void;
+  startDate: string | null;
+  endDate: string | null;
+  setStartDate: (date: string | null) => void;
+  setEndDate: (date: string | null) => void;
+  totalMatchCount: number;
+  isLoadingPage: boolean;
+  isSupabaseConnected: boolean | null;
+  errorMessage: string | null;
+  minHomeGoals: string;
+  maxHomeGoals: string;
+  minAwayGoals: string;
+  maxAwayGoals: string;
+  resultType: string | null;
+  htftCombination: string | null;
+  setMinHomeGoals: (value: string) => void;
+  setMaxHomeGoals: (value: string) => void;
+  setMinAwayGoals: (value: string) => void;
+  setMaxAwayGoals: (value: string) => void;
+  setResultType: (value: string | null) => void;
+  setHtftCombination: (value: string | null) => void;
+}
 
-// Initialize Supabase client
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const MatchDataContext = createContext<MatchDataContextType | undefined>(undefined);
 
-export const useMatchData = () => {
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [matches, setMatches] = React.useState<Match[]>([]);
-  const [filteredMatches, setFilteredMatches] = React.useState<Match[]>([]);
+// Storage key for persisting filters
+const STORAGE_KEY = 'winmix-filters';
+
+interface MatchDataProviderProps {
+  children: React.ReactNode;
+}
+
+// Provider component
+export const MatchDataProvider: React.FC<MatchDataProviderProps> = ({ children }) => {
+  // Move all the state and logic from useMatchData here
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingPage, setIsLoadingPage] = useState(false);
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [filteredMatches, setFilteredMatches] = useState<Match[]>([]);
+  const [totalMatchCount, setTotalMatchCount] = useState(0);
   
-  const [selectedHomeTeam, setSelectedHomeTeam] = React.useState<Team | null>(null);
-  const [selectedAwayTeam, setSelectedAwayTeam] = React.useState<Team | null>(null);
-  const [selectedBTTS, setSelectedBTTS] = React.useState<boolean | null>(null);
-  const [selectedComeback, setSelectedComeback] = React.useState<boolean | null>(null);
+  const [selectedHomeTeam, setSelectedHomeTeam] = useState<Team | null>(null);
+  const [selectedAwayTeam, setSelectedAwayTeam] = useState<Team | null>(null);
+  const [selectedBTTS, setSelectedBTTS] = useState<boolean | null>(null);
+  const [selectedComeback, setSelectedComeback] = useState<boolean | null>(null);
+  const [startDate, setStartDate] = useState<string | null>(null);
+  const [endDate, setEndDate] = useState<string | null>(null);
   
-  // Add date range filter state - MOVED TO TOP
-  const [startDate, setStartDate] = React.useState<string>('');
-  const [endDate, setEndDate] = React.useState<string>('');
+  // Add missing state declarations for the new filter variables
+  const [minHomeGoals, setMinHomeGoals] = useState<string>("");
+  const [maxHomeGoals, setMaxHomeGoals] = useState<string>("");
+  const [minAwayGoals, setMinAwayGoals] = useState<string>("");
+  const [maxAwayGoals, setMaxAwayGoals] = useState<string>("");
+  const [resultType, setResultType] = useState<string | null>(null);
+  const [htftCombination, setHtftCombination] = useState<string | null>(null);
   
-  const [currentPage, setCurrentPage] = React.useState(1);
-  const [itemsPerPage, setItemsPerPage] = React.useState(50);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
   
-  const [sortKey, setSortKey] = React.useState<SortKey>('home');
-  const [sortDirection, setSortDirection] = React.useState<SortDirection>('asc');
+  const [sortKey, setSortKey] = useState<SortKey>('home');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   
-  const [stats, setStats] = React.useState<MatchStats>({
+  const [stats, setStats] = useState<MatchStats>({
     total: 0,
     homeWins: 0,
     draws: 0,
@@ -44,10 +106,29 @@ export const useMatchData = () => {
     frequentResults: []
   });
   
-  const [isExtendedStatsModalOpen, setIsExtendedStatsModalOpen] = React.useState(false);
+  const [isExtendedStatsModalOpen, setIsExtendedStatsModalOpen] = useState(false);
+  
+  // Add state for Supabase connection status
+  const [isSupabaseConnected, setIsSupabaseConnected] = useState<boolean | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  // Check Supabase connection on mount
+  useEffect(() => {
+    const checkConnection = async () => {
+      const isConnected = await checkSupabaseConnection();
+      setIsSupabaseConnected(isConnected);
+      
+      if (!isConnected) {
+        console.warn('Supabase connection failed, will use mock data');
+        setErrorMessage('Adatbázis kapcsolódási hiba. Minta adatok használata.');
+      }
+    };
+    
+    checkConnection();
+  }, []);
 
   // Extract unique teams
-  const homeTeams = React.useMemo(() => {
+  const homeTeams = useMemo(() => {
     const teams = new Map<string, Team>();
     matches.forEach(match => {
       if (!teams.has(match.home.id)) {
@@ -57,7 +138,7 @@ export const useMatchData = () => {
     return Array.from(teams.values());
   }, [matches]);
 
-  const awayTeams = React.useMemo(() => {
+  const awayTeams = useMemo(() => {
     const teams = new Map<string, Team>();
     matches.forEach(match => {
       if (!teams.has(match.away.id)) {
@@ -67,8 +148,8 @@ export const useMatchData = () => {
     return Array.from(teams.values());
   }, [matches]);
 
-  // Define saveFiltersToStorage before it's used
-  const saveFiltersToStorage = React.useCallback(() => {
+  // Save filters to storage
+  const saveFiltersToStorage = useCallback(() => {
     try {
       const filters = {
         home: selectedHomeTeam,
@@ -92,8 +173,8 @@ export const useMatchData = () => {
     }
   }, [selectedHomeTeam, selectedAwayTeam, selectedBTTS, selectedComeback, startDate, endDate, itemsPerPage, sortKey, sortDirection]);
 
-  // Define clearFiltersFromStorage before it's used
-  const clearFiltersFromStorage = React.useCallback(() => {
+  // Clear filters from storage
+  const clearFiltersFromStorage = useCallback(() => {
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch (error) {
@@ -101,315 +182,52 @@ export const useMatchData = () => {
     }
   }, []);
 
-  // Load initial data with proper Supabase integration
-  React.useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        // Use Supabase client to fetch all matches from the database
-        // Add pagination to improve performance
-        const { data, error, count } = await supabase
-          .from('matches')
-          .select('*', { count: 'exact' })
-          .range(0, 199); // Fetch first 200 matches for initial load
-        
-        if (error) {
-          throw error;
-        }
-        
-        if (!data || data.length === 0) {
-          throw new Error('No matches found in the database');
-        }
-        
-        console.log(`Loaded ${data.length} matches out of ${count} total`);
-        
-        // Transform the data to match our Match interface
-        const transformedMatches: Match[] = data.map(match => ({
-          id: match.id.toString(),
-          match_time: match.match_time,
-          home_team: match.home_team,
-          away_team: match.away_team,
-          half_time_home_goals: match.half_time_home_goals,
-          half_time_away_goals: match.half_time_away_goals,
-          full_time_home_goals: match.full_time_home_goals,
-          full_time_away_goals: match.full_time_away_goals,
-          match_status: match.match_status || 'completed',
-          btts_computed: match.btts_computed,
-          comeback_computed: match.comeback_computed,
-          result_computed: match.result_computed,
-          
-          // Create compatible properties for existing components
-          home: {
-            id: `home-${match.id}`,
-            name: match.home_team,
-            logo: `https://img.heroui.chat/image/sports?w=100&h=100&u=${match.home_team.replace(/\s+/g, '')}`
-          },
-          away: {
-            id: `away-${match.id}`,
-            name: match.away_team,
-            logo: `https://img.heroui.chat/image/sports?w=100&h=100&u=${match.away_team.replace(/\s+/g, '')}`
-          },
-          htScore: {
-            home: match.half_time_home_goals || 0,
-            away: match.half_time_away_goals || 0
-          },
-          ftScore: {
-            home: match.full_time_home_goals,
-            away: match.full_time_away_goals
-          },
-          btts: match.btts_computed,
-          comeback: match.comeback_computed,
-          // Add a date field for filtering
-          date: match.match_time ? new Date(match.match_time) : new Date()
-        }));
-        
-        setMatches(transformedMatches);
-        setFilteredMatches(transformedMatches);
-        calculateStats(transformedMatches);
-        
-        addToast({
-          title: "Adatok betöltve",
-          description: `${transformedMatches.length} mérkőzés betöltve sikeresen.`,
-          severity: "success",
-        });
-      } catch (error) {
-        console.error("Error fetching match data:", error);
-        
-        // Fallback to mock data if Supabase fetch fails
-        setMatches(mockMatches);
-        setFilteredMatches(mockMatches);
-        calculateStats(mockMatches);
-        
-        addToast({
-          title: "Hiba történt",
-          description: "Az adatok betöltése a Supabase-ből sikertelen. Minta adatok betöltve.",
-          severity: "warning",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    fetchData();
-  }, []);
-
-  // Apply filters with updated implementation for database fields
-  const applyFilters = React.useCallback(() => {
-    setIsLoading(true);
-    
-    try {
-      let filtered = [...matches];
-      
-      if (selectedHomeTeam) {
-        filtered = filtered.filter(match => match.home_team === selectedHomeTeam.name);
-      }
-      
-      if (selectedAwayTeam) {
-        filtered = filtered.filter(match => match.away_team === selectedAwayTeam.name);
-      }
-      
-      if (selectedBTTS !== null) {
-        filtered = filtered.filter(match => match.btts_computed === selectedBTTS);
-      }
-      
-      if (selectedComeback !== null) {
-        filtered = filtered.filter(match => match.comeback_computed === selectedComeback);
-      }
-      
-      // Apply date range filter - use the date field instead of match_time
-      if (startDate) {
-        const startDateObj = new Date(startDate);
-        filtered = filtered.filter(match => {
-          // Use the date field for filtering since match_time is just a time
-          return match.date && match.date >= startDateObj;
-        });
-      }
-      
-      if (endDate) {
-        const endDateObj = new Date(endDate);
-        // Set to end of day
-        endDateObj.setHours(23, 59, 59, 999);
-        filtered = filtered.filter(match => {
-          // Use the date field for filtering since match_time is just a time
-          return match.date && match.date <= endDateObj;
-        });
-      }
-      
-      // Apply sorting
-      filtered = sortMatches(filtered, sortKey, sortDirection);
-      
-      setFilteredMatches(filtered);
-      calculateStats(filtered);
-      setCurrentPage(1); // Reset to first page
-      
-      // Save filters to localStorage
-      saveFiltersToStorage();
-      
-      addToast({
-        title: "Szűrés alkalmazva",
-        description: `${filtered.length} mérkőzés található a megadott feltételekkel.`,
-        severity: "success",
-      });
-    } catch (error) {
-      console.error("Error applying filters:", error);
-      addToast({
-        title: "Hiba történt",
-        description: "A szűrés alkalmazása sikertelen.",
-        severity: "danger",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [matches, selectedHomeTeam, selectedAwayTeam, selectedBTTS, selectedComeback, startDate, endDate, sortKey, sortDirection, saveFiltersToStorage]);
-
-  // Reset filters with updated implementation for date range
-  const resetFilters = React.useCallback(() => {
-    setSelectedHomeTeam(null);
-    setSelectedAwayTeam(null);
-    setSelectedBTTS(null);
-    setSelectedComeback(null);
-    setStartDate('');
-    setEndDate('');
-    
-    setSortKey('home');
-    setSortDirection('asc');
-    setCurrentPage(1);
-    
-    // Clear filters from localStorage
-    clearFiltersFromStorage();
-    
-    // Apply the reset filters
-    setFilteredMatches(matches);
-    calculateStats(matches);
-    
-    addToast({
-      title: "Szűrők visszaállítva",
-      description: "Az összes szűrő visszaállítva alapértelmezettre.",
-      severity: "primary",
-    });
-  }, [matches, clearFiltersFromStorage]);
-
-  // Export to CSV with updated implementation for database fields
-  const exportToCSV = React.useCallback(() => {
-    try {
-      if (filteredMatches.length === 0) {
-        addToast({
-          title: "Figyelmeztetés",
-          description: "Nincs exportálható adat.",
-          severity: "warning",
-        });
-        return;
-      }
-      
-      const headers = [
-        "ID",
-        "Dátum",
-        "Hazai csapat",
-        "Vendég csapat",
-        "Félidő hazai gólok",
-        "Félidő vendég gólok",
-        "Végeredmény hazai gólok",
-        "Végeredmény vendég gólok",
-        "Mérkőzés státusz",
-        "Mindkét csapat gólt szerzett",
-        "Fordítás történt",
-        "Eredmény"
-      ];
-      
-      const csvRows = [
-        headers.join(','),
-        ...filteredMatches.map(match => {
-          return [
-            `"${match.id}"`,
-            `"${match.match_time ? new Date(match.match_time).toISOString().split('T')[0] : ''}"`,
-            `"${match.home_team}"`,
-            `"${match.away_team}"`,
-            match.half_time_home_goals !== null ? match.half_time_home_goals : '',
-            match.half_time_away_goals !== null ? match.half_time_away_goals : '',
-            match.full_time_home_goals,
-            match.full_time_away_goals,
-            `"${match.match_status || 'completed'}"`,
-            match.btts_computed ? "Igen" : "Nem",
-            match.comeback_computed ? "Igen" : "Nem",
-            `"${match.result_computed}"`
-          ].join(',');
-        })
-      ];
-      
-      // Add BOM for proper UTF-8 encoding in Excel
-      const csvContent = '\ufeff' + csvRows.join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', `winmix-export-${new Date().toISOString().slice(0, 10)}.csv`);
-      link.style.visibility = 'hidden';
-      
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      
-      addToast({
-        title: "CSV exportálva",
-        description: `${filteredMatches.length} mérkőzés exportálva sikeresen.`,
-        severity: "success",
-      });
-    } catch (error) {
-      console.error("Error exporting to CSV:", error);
-      addToast({
-        title: "Hiba történt",
-        description: "A CSV exportálása sikertelen.",
-        severity: "danger",
-      });
-    }
-  }, [filteredMatches]);
-
-  // Enhanced sort matches function
-  const sortMatches = React.useCallback((matchesToSort: Match[], key: SortKey, direction: SortDirection): Match[] => {
-    if (!key) return matchesToSort;
-    
+  // Sort matches
+  const sortMatches = useCallback((matchesToSort: Match[], key: SortKey, direction: SortDirection): Match[] => {
     return [...matchesToSort].sort((a, b) => {
-      let result = 0;
+      let valueA: any;
+      let valueB: any;
       
       switch (key) {
         case 'home':
-          result = a.home_team.localeCompare(b.home_team, 'hu');
+          valueA = a.home.name;
+          valueB = b.home.name;
           break;
         case 'away':
-          result = a.away_team.localeCompare(b.away_team, 'hu');
+          valueA = a.away.name;
+          valueB = b.away.name;
           break;
         case 'ht':
-          const aHtHome = a.half_time_home_goals || 0;
-          const aHtAway = a.half_time_away_goals || 0;
-          const bHtHome = b.half_time_home_goals || 0;
-          const bHtAway = b.half_time_away_goals || 0;
-          result = (aHtHome + aHtAway) - (bHtHome + bHtAway);
-          if (result === 0) result = aHtHome - bHtHome;
+          valueA = `${a.htScore.home}-${a.htScore.away}`;
+          valueB = `${b.htScore.home}-${b.htScore.away}`;
           break;
         case 'ft':
-          const aFtHome = a.full_time_home_goals;
-          const aFtAway = a.full_time_away_goals;
-          const bFtHome = b.full_time_home_goals;
-          const bFtAway = b.full_time_away_goals;
-          result = (aFtHome + aFtAway) - (bFtHome + bFtAway);
-          if (result === 0) result = aFtHome - bFtHome;
+          valueA = `${a.ftScore.home}-${a.ftScore.away}`;
+          valueB = `${b.ftScore.home}-${b.ftScore.away}`;
           break;
         case 'btts':
-          result = (a.btts_computed ? 1 : 0) - (b.btts_computed ? 1 : 0);
+          valueA = a.btts ? 1 : 0;
+          valueB = b.btts ? 1 : 0;
           break;
         case 'comeback':
-          result = (a.comeback_computed ? 1 : 0) - (b.comeback_computed ? 1 : 0);
+          valueA = a.comeback ? 1 : 0;
+          valueB = b.comeback ? 1 : 0;
           break;
+        default:
+          valueA = a.home.name;
+          valueB = b.home.name;
       }
       
-      return direction === 'asc' ? result : -result;
+      if (direction === 'asc') {
+        return valueA > valueB ? 1 : -1;
+      } else {
+        return valueA < valueB ? 1 : -1;
+      }
     });
   }, []);
 
   // Calculate statistics based on filtered matches
-  const calculateStats = (matchesToCalculate: Match[]) => {
+  const calculateStats = useCallback((matchesToCalculate: Match[]) => {
     let homeWins = 0;
     let draws = 0;
     let awayWins = 0;
@@ -422,25 +240,25 @@ export const useMatchData = () => {
     const resultCounts: Record<string, number> = {};
     
     matchesToCalculate.forEach(match => {
-      // Count match results using result_computed
-      if (match.result_computed === 'H') {
+      // Count match results
+      if (match.ftScore.home > match.ftScore.away) {
         homeWins++;
-      } else if (match.result_computed === 'D') {
+      } else if (match.ftScore.home === match.ftScore.away) {
         draws++;
       } else {
         awayWins++;
       }
       
-      // Count BTTS and comebacks using computed fields
-      if (match.btts_computed) bttsCount++;
-      if (match.comeback_computed) comebackCount++;
+      // Count BTTS and comebacks
+      if (match.btts) bttsCount++;
+      if (match.comeback) comebackCount++;
       
       // Count goals
-      homeGoals += match.full_time_home_goals;
-      awayGoals += match.full_time_away_goals;
+      homeGoals += match.ftScore.home;
+      awayGoals += match.ftScore.away;
       
       // Count result frequencies
-      const resultKey = `${match.full_time_home_goals}-${match.full_time_away_goals}`;
+      const resultKey = `${match.ftScore.home}-${match.ftScore.away}`;
       resultCounts[resultKey] = (resultCounts[resultKey] || 0) + 1;
     });
     
@@ -465,42 +283,546 @@ export const useMatchData = () => {
       awayGoals,
       frequentResults
     });
-  };
+  }, []);
 
-  // Load stored filters
-  React.useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) return;
-      
-      const data = JSON.parse(stored);
-      
-      // Restore filters
-      if (data.filters) {
-        if (data.filters.home) setSelectedHomeTeam(data.filters.home);
-        if (data.filters.away) setSelectedAwayTeam(data.filters.away);
-        if (data.filters.btts !== null) setSelectedBTTS(data.filters.btts);
-        if (data.filters.comeback !== null) setSelectedComeback(data.filters.comeback);
-        if (data.filters.startDate) setStartDate(data.filters.startDate);
-        if (data.filters.endDate) setEndDate(data.filters.endDate);
-      }
-      
-      // Restore settings
-      if (data.itemsPerPage) {
-        setItemsPerPage(data.itemsPerPage);
-      }
-      
-      if (data.sortKey) {
-        setSortKey(data.sortKey);
-        setSortDirection(data.sortDirection || 'asc');
-      }
-    } catch (error) {
-      console.warn('Could not load stored filters:', error);
+  // Map our sort keys to database field names
+  const mapSortKeyToDbField = useCallback((key: SortKey): string => {
+    switch (key) {
+      case 'home':
+        return 'home_team';
+      case 'away':
+        return 'away_team';
+      case 'ht':
+        return 'half_time_home_goals';
+      case 'ft':
+        return 'full_time_home_goals';
+      case 'btts':
+        return 'btts_computed';
+      case 'comeback':
+        return 'comeback_computed';
+      default:
+        return 'match_time';
     }
   }, []);
 
-  // Return the context value
-  return {
+  // Apply filters - modified to use Supabase when connected
+  const applyFilters = useCallback(() => {
+    setIsLoadingPage(true);
+    
+    try {
+      if (isSupabaseConnected) {
+        // When using Supabase, we'll refetch data with new filters
+        // This will trigger the useEffect above with the new filter values
+        setCurrentPage(1); // Reset to first page
+        saveFiltersToStorage();
+        
+        addToast({
+          title: "Szűrés alkalmazva",
+          description: "Szűrők alkalmazva, adatok frissítése...",
+          severity: "success",
+        });
+      } else {
+        // When using mock data, filter locally
+        let filtered = [...matches];
+        
+        // Apply existing filters
+        if (selectedHomeTeam) {
+          filtered = filtered.filter(match => match.home.id === selectedHomeTeam.id);
+        }
+        
+        if (selectedAwayTeam) {
+          filtered = filtered.filter(match => match.away.id === selectedAwayTeam.id);
+        }
+        
+        if (selectedBTTS !== null) {
+          filtered = filtered.filter(match => match.btts === selectedBTTS);
+        }
+        
+        if (selectedComeback !== null) {
+          filtered = filtered.filter(match => match.comeback === selectedComeback);
+        }
+        
+        // Apply date range filters
+        if (startDate) {
+          const startDateObj = new Date(startDate);
+          filtered = filtered.filter(match => new Date(match.date) >= startDateObj);
+        }
+        
+        if (endDate) {
+          const endDateObj = new Date(endDate);
+          endDateObj.setHours(23, 59, 59, 999); // End of day
+          filtered = filtered.filter(match => new Date(match.date) <= endDateObj);
+        }
+        
+        // Apply new filters
+        // Home goals range
+        if (minHomeGoals !== "") {
+          const min = parseInt(minHomeGoals);
+          filtered = filtered.filter(match => match.ftScore.home >= min);
+        }
+        
+        if (maxHomeGoals !== "") {
+          const max = parseInt(maxHomeGoals);
+          filtered = filtered.filter(match => match.ftScore.home <= max);
+        }
+        
+        // Away goals range
+        if (minAwayGoals !== "") {
+          const min = parseInt(minAwayGoals);
+          filtered = filtered.filter(match => match.ftScore.away >= min);
+        }
+        
+        if (maxAwayGoals !== "") {
+          const max = parseInt(maxAwayGoals);
+          filtered = filtered.filter(match => match.ftScore.away <= max);
+        }
+        
+        // Result type
+        if (resultType) {
+          if (resultType === "H") {
+            filtered = filtered.filter(match => match.ftScore.home > match.ftScore.away);
+          } else if (resultType === "D") {
+            filtered = filtered.filter(match => match.ftScore.home === match.ftScore.away);
+          } else if (resultType === "A") {
+            filtered = filtered.filter(match => match.ftScore.home < match.ftScore.away);
+          }
+        }
+        
+        // HT/FT combination
+        if (htftCombination) {
+          const [ht, ft] = htftCombination.split("");
+          
+          // Half-time result
+          if (ht === "H") {
+            filtered = filtered.filter(match => match.htScore.home > match.htScore.away);
+          } else if (ht === "D") {
+            filtered = filtered.filter(match => match.htScore.home === match.htScore.away);
+          } else if (ht === "A") {
+            filtered = filtered.filter(match => match.htScore.home < match.htScore.away);
+          }
+          
+          // Full-time result
+          if (ft === "H") {
+            filtered = filtered.filter(match => match.ftScore.home > match.ftScore.away);
+          } else if (ft === "D") {
+            filtered = filtered.filter(match => match.ftScore.home === match.ftScore.away);
+          } else if (ft === "A") {
+            filtered = filtered.filter(match => match.ftScore.home < match.ftScore.away);
+          }
+        }
+        
+        // Apply sorting
+        filtered = sortMatches(filtered, sortKey, sortDirection);
+        
+        setFilteredMatches(filtered);
+        calculateStats(filtered);
+        setCurrentPage(1); // Reset to first page
+        setTotalMatchCount(filtered.length); // Update total count to reflect filtered results
+        
+        // Save filters to storage
+        saveFiltersToStorage();
+        
+        addToast({
+          title: "Szűrés alkalmazva",
+          description: `${filtered.length} mérkőzés található a megadott feltételekkel.`,
+          severity: "success",
+        });
+      }
+    } catch (error) {
+      console.error("Error applying filters:", error);
+      setErrorMessage(`Szűrési hiba: ${error instanceof Error ? error.message : 'Ismeretlen hiba'}`);
+      
+      addToast({
+        title: "Hiba történt",
+        description: "A szűrés alkalmazása sikertelen.",
+        severity: "danger",
+      });
+    } finally {
+      setIsLoadingPage(false);
+    }
+  }, [
+    matches, 
+    selectedHomeTeam, 
+    selectedAwayTeam, 
+    selectedBTTS, 
+    selectedComeback, 
+    startDate, 
+    endDate, 
+    sortKey, 
+    sortDirection, 
+    calculateStats,
+    saveFiltersToStorage,
+    sortMatches,
+    isSupabaseConnected,
+    minHomeGoals,
+    maxHomeGoals,
+    minAwayGoals,
+    maxAwayGoals,
+    resultType,
+    htftCombination
+  ]);
+
+  // Reset filters
+  const resetFilters = useCallback(() => {
+    setSelectedHomeTeam(null);
+    setSelectedAwayTeam(null);
+    setSelectedBTTS(null);
+    setSelectedComeback(null);
+    setStartDate(null);
+    setEndDate(null);
+    
+    // Reset new filters
+    setMinHomeGoals("");
+    setMaxHomeGoals("");
+    setMinAwayGoals("");
+    setMaxAwayGoals("");
+    setResultType(null);
+    setHtftCombination(null);
+    
+    setFilteredMatches(matches);
+    calculateStats(matches);
+    setCurrentPage(1);
+    
+    // Clear filters from storage
+    clearFiltersFromStorage();
+    
+    addToast({
+      title: "Szűrők visszaállítva",
+      description: "Az összes szűrő visszaállítva alapértelmezettre.",
+      severity: "primary",
+    });
+  }, [matches, calculateStats, clearFiltersFromStorage]);
+
+  // Load initial data - modified to handle "all" results
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      setIsLoadingPage(true);
+      
+      try {
+        // First check if Supabase is connected
+        if (isSupabaseConnected === null) {
+          // Still checking connection, wait
+          return;
+        }
+        
+        if (isSupabaseConnected) {
+          // Use Supabase to fetch data
+          const filters: SupabaseMatchFilters = {};
+          
+          // Apply filters
+          if (selectedHomeTeam) {
+            filters.homeTeam = selectedHomeTeam.id;
+          }
+          
+          if (selectedAwayTeam) {
+            filters.awayTeam = selectedAwayTeam.id;
+          }
+          
+          if (selectedBTTS !== null) {
+            filters.btts = selectedBTTS;
+          }
+          
+          if (selectedComeback !== null) {
+            filters.comeback = selectedComeback;
+          }
+          
+          if (startDate) {
+            filters.startDate = startDate;
+          }
+          
+          if (endDate) {
+            filters.endDate = endDate;
+          }
+          
+          // Apply new filters
+          if (minHomeGoals !== "") {
+            filters.minHomeGoals = parseInt(minHomeGoals);
+          }
+          
+          if (maxHomeGoals !== "") {
+            filters.maxHomeGoals = parseInt(maxHomeGoals);
+          }
+          
+          if (minAwayGoals !== "") {
+            filters.minAwayGoals = parseInt(minAwayGoals);
+          }
+          
+          if (maxAwayGoals !== "") {
+            filters.maxAwayGoals = parseInt(maxAwayGoals);
+          }
+          
+          if (resultType) {
+            filters.result = resultType as 'H' | 'D' | 'A';
+          }
+          
+          console.log('Fetching with filters:', filters);
+          
+          try {
+            // If itemsPerPage is very large, we're requesting all results
+            const isRequestingAll = itemsPerPage > 1000;
+            
+            // For "all" requests, use a different approach to avoid pagination limits
+            if (isRequestingAll) {
+              // Fetch all results in chunks and combine
+              const CHUNK_SIZE = 100; // Reduced chunk size for better stability
+              let allResults: Match[] = [];
+              let hasMore = true;
+              let page = 1;
+              let totalCount = 0;
+              
+              while (hasMore) {
+                console.log(`Fetching chunk ${page} with size ${CHUNK_SIZE}`);
+                const { data, count, error } = await fetchMatches(
+                  filters,
+                  page,
+                  CHUNK_SIZE,
+                  mapSortKeyToDbField(sortKey),
+                  sortDirection
+                );
+                
+                if (error) {
+                  console.error('Error fetching chunk:', error);
+                  throw error;
+                }
+                
+                if (page === 1) totalCount = count || 0;
+                
+                if (data && data.length > 0) {
+                  console.log(`Received ${data.length} matches in chunk ${page}`);
+                  allResults = [...allResults, ...data];
+                  if (data.length < CHUNK_SIZE) {
+                    hasMore = false;
+                  } else {
+                    page++;
+                  }
+                } else {
+                  hasMore = false;
+                }
+              }
+              
+              console.log(`Total matches fetched: ${allResults.length}`);
+              setMatches(allResults);
+              setFilteredMatches(allResults);
+              setTotalMatchCount(totalCount);
+              calculateStats(allResults);
+              
+              addToast({
+                title: "Összes adat betöltve",
+                description: `${allResults.length} mérkőzés betöltve sikeresen.`,
+                severity: "success",
+              });
+            } else {
+              // Regular paginated fetch
+              console.log(`Fetching page ${currentPage} with size ${itemsPerPage}`);
+              const { data, count, error } = await fetchMatches(
+                filters,
+                currentPage,
+                itemsPerPage,
+                mapSortKeyToDbField(sortKey),
+                sortDirection
+              );
+              
+              if (error) {
+                console.error('Error fetching paginated data:', error);
+                throw error;
+              }
+              
+              console.log(`Received ${data.length} matches, total count: ${count}`);
+              setMatches(data);
+              setFilteredMatches(data);
+              setTotalMatchCount(count || 0);
+              calculateStats(data);
+            }
+          } catch (fetchError) {
+            console.error('Error during fetch operation:', fetchError);
+            throw fetchError;
+          }
+        } else {
+          // Use mock data as fallback
+          console.log("Using mock data as fallback");
+          setMatches(mockMatches);
+          
+          // Apply filters to mock data
+          let filtered = [...mockMatches];
+          
+          if (selectedHomeTeam) {
+            filtered = filtered.filter(match => match.home.id === selectedHomeTeam.id);
+          }
+          
+          if (selectedAwayTeam) {
+            filtered = filtered.filter(match => match.away.id === selectedAwayTeam.id);
+          }
+          
+          if (selectedBTTS !== null) {
+            filtered = filtered.filter(match => match.btts === selectedBTTS);
+          }
+          
+          if (selectedComeback !== null) {
+            filtered = filtered.filter(match => match.comeback === selectedComeback);
+          }
+          
+          // Apply date range filters
+          if (startDate) {
+            const startDateObj = new Date(startDate);
+            filtered = filtered.filter(match => new Date(match.date) >= startDateObj);
+          }
+          
+          if (endDate) {
+            const endDateObj = new Date(endDate);
+            endDateObj.setHours(23, 59, 59, 999); // End of day
+            filtered = filtered.filter(match => new Date(match.date) <= endDateObj);
+          }
+          
+          // Apply new filters
+          if (minHomeGoals !== "") {
+            const min = parseInt(minHomeGoals);
+            filtered = filtered.filter(match => match.ftScore.home >= min);
+          }
+          
+          if (maxHomeGoals !== "") {
+            const max = parseInt(maxHomeGoals);
+            filtered = filtered.filter(match => match.ftScore.home <= max);
+          }
+          
+          if (minAwayGoals !== "") {
+            const min = parseInt(minAwayGoals);
+            filtered = filtered.filter(match => match.ftScore.away >= min);
+          }
+          
+          if (maxAwayGoals !== "") {
+            const max = parseInt(maxAwayGoals);
+            filtered = filtered.filter(match => match.ftScore.away <= max);
+          }
+          
+          if (resultType) {
+            if (resultType === "H") {
+              filtered = filtered.filter(match => match.ftScore.home > match.ftScore.away);
+            } else if (resultType === "D") {
+              filtered = filtered.filter(match => match.ftScore.home === match.ftScore.away);
+            } else if (resultType === "A") {
+              filtered = filtered.filter(match => match.ftScore.home < match.ftScore.away);
+            }
+          }
+          
+          // Apply sorting
+          filtered = sortMatches(filtered, sortKey, sortDirection);
+          
+          // If requesting all, don't paginate the mock data
+          if (itemsPerPage > 1000) {
+            setFilteredMatches(filtered);
+          } else {
+            // Apply pagination to mock data
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            setFilteredMatches(filtered.slice(startIndex, endIndex));
+          }
+          
+          setTotalMatchCount(filtered.length);
+          calculateStats(filtered);
+        }
+      } catch (error) {
+        console.error("Error fetching match data:", error);
+        setErrorMessage(`Adatbetöltési hiba: ${error instanceof Error ? error.message : 'Ismeretlen hiba'}`);
+        
+        // Fallback to mock data in case of error
+        console.log("Falling back to mock data due to error");
+        setMatches(mockMatches);
+        setFilteredMatches(mockMatches.slice(0, itemsPerPage));
+        setTotalMatchCount(mockMatches.length);
+        calculateStats(mockMatches.slice(0, itemsPerPage));
+        
+        addToast({
+          title: "Hiba történt",
+          description: "Az adatok betöltése sikertelen. Minta adatok megjelenítése.",
+          severity: "danger",
+        });
+      } finally {
+        setIsLoading(false);
+        setIsLoadingPage(false);
+      }
+    };
+    
+    fetchData();
+  }, [
+    isSupabaseConnected,
+    currentPage,
+    itemsPerPage,
+    sortKey,
+    sortDirection,
+    selectedHomeTeam,
+    selectedAwayTeam,
+    selectedBTTS,
+    selectedComeback,
+    startDate,
+    endDate,
+    minHomeGoals,
+    maxHomeGoals,
+    minAwayGoals,
+    maxAwayGoals,
+    resultType,
+    htftCombination,
+    calculateStats,
+    sortMatches,
+    mapSortKeyToDbField
+  ]);
+
+  // Add the missing exportToCSV function
+  const exportToCSV = useCallback(() => {
+    try {
+      const headers = [
+        "Hazai csapat",
+        "Vendég csapat",
+        "Félidő eredmény",
+        "Végeredmény",
+        "Mindkét csapat gólt szerzett",
+        "Fordítás történt"
+      ];
+      
+      const csvRows = [
+        headers.join(','),
+        ...filteredMatches.map(match => {
+          return [
+            `"${match.home.name}"`,
+            `"${match.away.name}"`,
+            `${match.htScore.home}-${match.htScore.away}`,
+            `${match.ftScore.home}-${match.ftScore.away}`,
+            match.btts ? "Igen" : "Nem",
+            match.comeback ? "Igen" : "Nem"
+          ].join(',');
+        })
+      ];
+      
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `winmix-export-${new Date().toISOString().slice(0, 10)}.csv`);
+      link.style.visibility = 'hidden';
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      addToast({
+        title: "Exportálás sikeres",
+        description: `${filteredMatches.length} mérkőzés exportálva CSV formátumban`,
+        severity: "success",
+      });
+    } catch (error) {
+      console.error("Error exporting to CSV:", error);
+      addToast({
+        title: "Hiba történt",
+        description: "A CSV exportálása sikertelen.",
+        severity: "danger",
+      });
+    }
+  }, [filteredMatches]);
+
+  // Create the context value object
+  const contextValue: MatchDataContextType = useMemo(() => ({
     isLoading,
     matches,
     filteredMatches,
@@ -531,36 +853,214 @@ export const useMatchData = () => {
     startDate,
     endDate,
     setStartDate,
-    setEndDate
+    setEndDate,
+    totalMatchCount,
+    isLoadingPage,
+    isSupabaseConnected,
+    errorMessage,
+    
+    // Add new filter properties
+    minHomeGoals,
+    maxHomeGoals,
+    minAwayGoals,
+    maxAwayGoals,
+    resultType,
+    htftCombination,
+    setMinHomeGoals,
+    setMaxHomeGoals,
+    setMinAwayGoals,
+    setMaxAwayGoals,
+    setResultType,
+    setHtftCombination
+  }), [
+    isLoading,
+    matches,
+    filteredMatches,
+    homeTeams,
+    awayTeams,
+    selectedHomeTeam,
+    selectedAwayTeam,
+    selectedBTTS,
+    selectedComeback,
+    setSelectedHomeTeam,
+    setSelectedAwayTeam,
+    setSelectedBTTS,
+    setSelectedComeback,
+    applyFilters,
+    resetFilters,
+    exportToCSV,
+    stats,
+    currentPage,
+    itemsPerPage,
+    setCurrentPage,
+    setItemsPerPage,
+    sortKey,
+    sortDirection,
+    setSortKey,
+    setSortDirection,
+    isExtendedStatsModalOpen,
+    setIsExtendedStatsModalOpen,
+    startDate,
+    endDate,
+    setStartDate,
+    setEndDate,
+    totalMatchCount,
+    isLoadingPage,
+    isSupabaseConnected,
+    errorMessage,
+    
+    // Add new filter dependencies
+    minHomeGoals,
+    maxHomeGoals,
+    minAwayGoals,
+    maxAwayGoals,
+    resultType,
+    htftCombination,
+    setMinHomeGoals,
+    setMaxHomeGoals,
+    setMinAwayGoals,
+    setMaxAwayGoals,
+    setResultType,
+    setHtftCombination
+  ]);
+
+  return React.createElement(MatchDataContext.Provider, { value: contextValue }, children);
+};
+
+// Custom hook to use the match data context
+export const useMatchData = (): MatchDataContextType => {
+  const context = useContext(MatchDataContext);
+  if (context === undefined) {
+    throw new Error('useMatchData must be used within a MatchDataProvider');
+  }
+  return context;
+};
+
+// Split the large hook into smaller specialized hooks
+export const useMatchFilters = () => {
+  const [selectedHomeTeam, setSelectedHomeTeam] = useState<Team | null>(null);
+  const [selectedAwayTeam, setSelectedAwayTeam] = useState<Team | null>(null);
+  const [selectedBTTS, setSelectedBTTS] = useState<boolean | null>(null);
+  const [selectedComeback, setSelectedComeback] = useState<boolean | null>(null);
+  const [startDate, setStartDate] = useState<string | null>(null);
+  const [endDate, setEndDate] = useState<string | null>(null);
+  
+  // Load stored filters on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (!stored) return;
+      
+      const data = JSON.parse(stored);
+      
+      // Restore filters
+      if (data.filters) {
+        if (data.filters.home) setSelectedHomeTeam(data.filters.home);
+        if (data.filters.away) setSelectedAwayTeam(data.filters.away);
+        if (data.filters.btts !== null) setSelectedBTTS(data.filters.btts);
+        if (data.filters.comeback !== null) setSelectedComeback(data.filters.comeback);
+        if (data.filters.startDate) setStartDate(data.filters.startDate);
+        if (data.filters.endDate) setEndDate(data.filters.endDate);
+      }
+    } catch (error) {
+      console.warn('Could not load stored filters:', error);
+    }
+  }, []);
+  
+  const saveFiltersToStorage = useCallback(() => {
+    try {
+      const filters = {
+        home: selectedHomeTeam,
+        away: selectedAwayTeam,
+        btts: selectedBTTS,
+        comeback: selectedComeback,
+        startDate,
+        endDate
+      };
+      
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ filters }));
+    } catch (error) {
+      console.warn('Could not save filters to storage:', error);
+    }
+  }, [selectedHomeTeam, selectedAwayTeam, selectedBTTS, selectedComeback, startDate, endDate]);
+  
+  const clearFiltersFromStorage = useCallback(() => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (error) {
+      console.warn('Could not clear filters from storage:', error);
+    }
+  }, []);
+  
+  return {
+    selectedHomeTeam,
+    selectedAwayTeam,
+    selectedBTTS,
+    selectedComeback,
+    startDate,
+    endDate,
+    setSelectedHomeTeam,
+    setSelectedAwayTeam,
+    setSelectedBTTS,
+    setSelectedComeback,
+    setStartDate,
+    setEndDate,
+    saveFiltersToStorage,
+    clearFiltersFromStorage
   };
 };
 
-// Create a context type
-export type MatchDataContextType = ReturnType<typeof useMatchData>;
-
-// Create the context
-export const MatchDataContext = React.createContext<MatchDataContextType | null>(null);
-
-// Create a provider component
-interface MatchDataProviderProps {
-  children: React.ReactNode;
-}
-
-export const MatchDataProvider: React.FC<MatchDataProviderProps> = ({ children }) => {
-  const matchData = useMatchData();
+export const useMatchPagination = () => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
+  const [sortKey, setSortKey] = useState<SortKey>('home');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   
-  return React.createElement(
-    MatchDataContext.Provider,
-    { value: matchData },
-    children
-  );
-};
-
-// Create a hook to use the match data context
-export const useMatchDataContext = () => {
-  const context = React.useContext(MatchDataContext);
-  if (!context) {
-    throw new Error('useMatchDataContext must be used within a MatchDataProvider');
-  }
-  return context;
+  // Load stored pagination settings
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (!stored) return;
+      
+      const data = JSON.parse(stored);
+      
+      // Restore settings
+      if (data.itemsPerPage) {
+        setItemsPerPage(data.itemsPerPage);
+      }
+      
+      if (data.sortKey) {
+        setSortKey(data.sortKey);
+        setSortDirection(data.sortDirection || 'asc');
+      }
+    } catch (error) {
+      console.warn('Could not load stored pagination settings:', error);
+    }
+  }, []);
+  
+  const savePaginationToStorage = useCallback(() => {
+    try {
+      const data = {
+        itemsPerPage,
+        sortKey,
+        sortDirection
+      };
+      
+      localStorage.setItem('winmix-pagination', JSON.stringify(data));
+    } catch (error) {
+      console.warn('Could not save pagination to storage:', error);
+    }
+  }, [itemsPerPage, sortKey, sortDirection]);
+  
+  return {
+    currentPage,
+    itemsPerPage,
+    sortKey,
+    sortDirection,
+    setCurrentPage,
+    setItemsPerPage,
+    setSortKey,
+    setSortDirection,
+    savePaginationToStorage
+  };
 };

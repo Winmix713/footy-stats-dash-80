@@ -2,6 +2,7 @@ import React from 'react';
 import { ResultsSection } from '../components/results-section';
 import { VirtualPitchManager } from '../components/virtual-pitch-manager';
 import { useMatchData } from '../hooks/use-match-data';
+import { Icon } from '@iconify/react';
 
 const ResultsPage: React.FC = () => {
   const {
@@ -13,26 +14,24 @@ const ResultsPage: React.FC = () => {
     sortKey,
     sortDirection,
     setSortKey,
-    setSortDirection
+    setSortDirection,
+    totalMatchCount,
+    isLoadingPage,
+    isSupabaseConnected
   } = useMatchData();
-
-  // Scroll to virtual pitch manager if hash is present
-  React.useEffect(() => {
-    if (window.location.hash === '#virtual-pitch') {
-      setTimeout(() => {
-        document.getElementById('virtual-pitch')?.scrollIntoView({ behavior: 'smooth' });
-      }, 500);
-    }
-  }, []);
-
+  
   return (
     <div className="page-content">
       <div className="text-center space-y-3 mb-10">
-        <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight text-white">
-          Eredmények
-        </h1>
+        <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight text-white">Eredmények</h1>
         <p className="max-w-2xl mx-auto text-sm sm:text-base text-zinc-300">
-          Böngészd a mérkőzések eredményeit, rendezd és szűrd őket különböző szempontok szerint.
+          Az összes mérkőzés eredménye és részletes adatai.
+          {isSupabaseConnected === false && (
+            <span className="block mt-2 text-amber-300 text-xs">
+              <Icon icon="lucide:alert-triangle" className="inline-block mr-1" width={14} height={14} />
+              Offline mód: Minta adatok megjelenítése
+            </span>
+          )}
         </p>
       </div>
       
@@ -40,7 +39,7 @@ const ResultsPage: React.FC = () => {
         matches={filteredMatches}
         currentPage={currentPage}
         itemsPerPage={itemsPerPage}
-        totalItems={filteredMatches.length}
+        totalItems={totalMatchCount} // Use totalMatchCount instead of filteredMatches.length
         onPageChange={setCurrentPage}
         onItemsPerPageChange={setItemsPerPage}
         sortKey={sortKey}
@@ -53,11 +52,18 @@ const ResultsPage: React.FC = () => {
             setSortDirection('asc');
           }
         }}
+        isLoadingPage={isLoadingPage}
       />
       
-      <VirtualPitchManager 
-        match={filteredMatches.length > 0 ? filteredMatches[0] : undefined} 
-      />
+      <div className="mt-6 text-center text-sm text-zinc-400">
+        Összesen {totalMatchCount} mérkőzés található az adatbázisban.
+        {isSupabaseConnected && (
+          <span className="ml-2 text-emerald-300">
+            <Icon icon="lucide:database" className="inline-block mr-1" width={14} height={14} />
+            Supabase adatbázis használatban
+          </span>
+        )}
+      </div>
     </div>
   );
 };
