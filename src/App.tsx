@@ -1,6 +1,5 @@
 import React from 'react';
-// Replace BrowserRouter, Routes with proper v5 imports
-import { Switch, Route } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import { Header } from './components/header';
 import { Footer } from './components/footer';
 import { BackgroundEffects } from './components/background-effects';
@@ -18,7 +17,6 @@ import StatsPage from './pages/stats';
 import ResultsPage from './pages/results';
 
 const App: React.FC = () => {
-  // Add applyFilters to the destructured values from useMatchData
   const {
     isLoading,
     selectedHomeTeam,
@@ -42,12 +40,12 @@ const App: React.FC = () => {
       <main className="relative z-10">
         <div className="bg-black/20">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
-            <Switch>
-              <Route exact path="/" component={HomePage} />
-              <Route path="/teams" component={TeamsPage} />
-              <Route path="/stats" component={StatsPage} />
-              <Route path="/results" component={ResultsPage} />
-            </Switch>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/teams" element={<TeamsPage />} />
+              <Route path="/stats" element={<StatsPage />} />
+              <Route path="/results" element={<ResultsPage />} />
+            </Routes>
           </div>
         </div>
       </main>
@@ -64,10 +62,7 @@ const App: React.FC = () => {
         stats={stats}
       />
       
-      {/* Add error banner for database connection issues */}
       <ErrorBanner />
-      
-      {/* Add connection status indicator */}
       <ConnectionStatus />
     </div>
   );

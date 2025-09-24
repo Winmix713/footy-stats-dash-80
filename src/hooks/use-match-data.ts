@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { Match, Team, MatchStats, SortKey, SortDirection } from '../types/match';
 import { addToast } from '@heroui/react';
-import { supabase, fetchMatches, checkSupabaseConnection, MatchFilters as SupabaseMatchFilters } from '../lib/supabase';
+import { supabase, fetchMatches, MatchFilters as SupabaseMatchFilters } from '../lib/supabase';
 import { mockMatches } from '../data/mock-data';
 
 // Create a context for match data
@@ -114,17 +114,9 @@ export const MatchDataProvider: React.FC<MatchDataProviderProps> = ({ children }
   
   // Check Supabase connection on mount
   useEffect(() => {
-    const checkConnection = async () => {
-      const isConnected = await checkSupabaseConnection();
-      setIsSupabaseConnected(isConnected);
-      
-      if (!isConnected) {
-        console.warn('Supabase connection failed, will use mock data');
-        setErrorMessage('Adatbázis kapcsolódási hiba. Minta adatok használata.');
-      }
-    };
-    
-    checkConnection();
+    // Set to false since we don't have Supabase configured
+    setIsSupabaseConnected(false);
+    setErrorMessage('Adatbázis kapcsolódási hiba. Minta adatok használata.');
   }, []);
 
   // Extract unique teams
@@ -512,11 +504,11 @@ export const MatchDataProvider: React.FC<MatchDataProviderProps> = ({ children }
           
           // Apply filters
           if (selectedHomeTeam) {
-            filters.homeTeam = selectedHomeTeam.id;
+            filters.home_team = selectedHomeTeam.id;
           }
           
           if (selectedAwayTeam) {
-            filters.awayTeam = selectedAwayTeam.id;
+            filters.away_team = selectedAwayTeam.id;
           }
           
           if (selectedBTTS !== null) {
@@ -573,18 +565,13 @@ export const MatchDataProvider: React.FC<MatchDataProviderProps> = ({ children }
               
               while (hasMore) {
                 console.log(`Fetching chunk ${page} with size ${CHUNK_SIZE}`);
-                const { data, count, error } = await fetchMatches(
+                const { data, count } = await fetchMatches(
                   filters,
                   page,
                   CHUNK_SIZE,
                   mapSortKeyToDbField(sortKey),
                   sortDirection
                 );
-                
-                if (error) {
-                  console.error('Error fetching chunk:', error);
-                  throw error;
-                }
                 
                 if (page === 1) totalCount = count || 0;
                 
@@ -615,18 +602,13 @@ export const MatchDataProvider: React.FC<MatchDataProviderProps> = ({ children }
             } else {
               // Regular paginated fetch
               console.log(`Fetching page ${currentPage} with size ${itemsPerPage}`);
-              const { data, count, error } = await fetchMatches(
+              const { data, count } = await fetchMatches(
                 filters,
                 currentPage,
                 itemsPerPage,
                 mapSortKeyToDbField(sortKey),
                 sortDirection
               );
-              
-              if (error) {
-                console.error('Error fetching paginated data:', error);
-                throw error;
-              }
               
               console.log(`Received ${data.length} matches, total count: ${count}`);
               setMatches(data);

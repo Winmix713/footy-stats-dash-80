@@ -1,6 +1,5 @@
 import React from 'react';
 import { ResultsSection } from '../components/results-section';
-import { VirtualPitchManager } from '../components/virtual-pitch-manager';
 import { useMatchData } from '../hooks/use-match-data';
 import { Icon } from '@iconify/react';
 

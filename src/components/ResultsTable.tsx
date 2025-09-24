@@ -207,7 +207,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
               className="hover:bg-white/5 cursor-pointer transition-colors"
               onClick={() => onMatchClick && onMatchClick(match)}
             >
-              <TableCell className="text-zinc-300">{formatDate(match.date)}</TableCell>
+              <TableCell className="text-zinc-300">{formatDate(match.date.toString())}</TableCell>
               <TableCell>
                 <div className="flex items-center gap-2">
                   {match.home.logo && (

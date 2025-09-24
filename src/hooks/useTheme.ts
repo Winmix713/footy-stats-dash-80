@@ -1,53 +1,52 @@
-
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 
 type Theme = 'light' | 'dark' | 'system';
 
 export const useTheme = () => {
-  const [theme, setTheme] = useState<Theme>(() => {
-    const stored = localStorage.getItem('theme') as Theme;
-    return stored || 'system';
-  });
-
+  const [theme, setTheme] = useState<Theme>('system');
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
+
+  useEffect(() => {
+    const stored = localStorage.getItem('theme') as Theme;
+    if (stored && ['light', 'dark', 'system'].includes(stored)) {
+      setTheme(stored);
+    }
+  }, []);
 
   useEffect(() => {
     const root = window.document.documentElement;
     
-    const applyTheme = (theme: 'light' | 'dark') => {
+    const updateResolvedTheme = () => {
+      let resolved: 'light' | 'dark' = 'light';
+      
+      if (theme === 'system') {
+        resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      } else {
+        resolved = theme === 'dark' ? 'dark' : 'light';
+      }
+      
+      setResolvedTheme(resolved);
+      
       root.classList.remove('light', 'dark');
-      root.classList.add(theme);
-      setResolvedTheme(theme);
+      root.classList.add(resolved);
     };
 
-    if (theme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      applyTheme(systemTheme);
-
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const handleChange = () => {
-        applyTheme(mediaQuery.matches ? 'dark' : 'light');
-      };
-
-      mediaQuery.addEventListener('change', handleChange);
-      return () => mediaQuery.removeEventListener('change', handleChange);
-    } else {
-      applyTheme(theme);
-    }
-
-    localStorage.setItem('theme', theme);
+    updateResolvedTheme();
+    
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    mediaQuery.addEventListener('change', updateResolvedTheme);
+    
+    return () => mediaQuery.removeEventListener('change', updateResolvedTheme);
   }, [theme]);
+
+  const changeTheme = (newTheme: Theme) => {
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+  };
 
   return {
     theme,
     resolvedTheme,
-    setTheme,
-    toggleTheme: () => {
-      setTheme(current => {
-        if (current === 'light') return 'dark';
-        if (current === 'dark') return 'system';
-        return 'light';
-      });
-    }
+    setTheme: changeTheme
   };
 };
