@@ -1,7 +1,7 @@
 import { Match } from '../types/match';
 
-// A spanyol csapatok adatai a megadott nevekkel
-const teams = [
+// A spanyol csapatok adatai a megadott nevekkel - ABC sorrendben
+export const spanishTeams = [
   { id: '1', name: 'Alaves', logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/f/f8/Deportivo_Alav%C3%A9s_logo_%282020%29.svg/500px-Deportivo_Alav%C3%A9s_logo_%282020%29.svg.png' },
   { id: '2', name: 'Barcelona', logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/4/47/FC_Barcelona_%28crest%29.svg/500px-FC_Barcelona_%28crest%29.svg.png' },
   { id: '3', name: 'Bilbao', logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/9/98/Club_Athletic_Bilbao_logo.svg/500px-Club_Athletic_Bilbao_logo.svg.png' },
@@ -20,6 +20,9 @@ const teams = [
   { id: '16', name: 'Villarreal', logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/7/70/Villarreal_CF_logo.svg/500px-Villarreal_CF_logo.svg.png' },
 ];
 
+// Remove the old teams array since we're now using the exported spanishTeams
+// const teams = [ ... ];
+
 const generateRandomMatches = (count: number): Match[] => {
   // Generate more realistic match data
   const matches: Match[] = [];
@@ -27,14 +30,14 @@ const generateRandomMatches = (count: number): Match[] => {
 
   for (let i = 0; i < count; i++) {
     // Ensure home and away teams are different
-    let homeIndex = Math.floor(Math.random() * teams.length);
-    let awayIndex = Math.floor(Math.random() * teams.length);
+    let homeIndex = Math.floor(Math.random() * spanishTeams.length);
+    let awayIndex = Math.floor(Math.random() * spanishTeams.length);
     while (homeIndex === awayIndex) {
-      awayIndex = Math.floor(Math.random() * teams.length);
+      awayIndex = Math.floor(Math.random() * spanishTeams.length);
     }
 
-    const homeTeam = teams[homeIndex];
-    const awayTeam = teams[awayIndex];
+    const homeTeam = spanishTeams[homeIndex];
+    const awayTeam = spanishTeams[awayIndex];
 
     // Generate realistic scores with home advantage
     const homeAdvantage = Math.random() < 0.55; // 55% chance of home advantage

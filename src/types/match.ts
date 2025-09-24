@@ -6,20 +6,7 @@ export interface Team {
 
 export interface Match {
   id: string;
-  // Update match_time to be a time string instead of Date to match SQL schema
-  match_time: string; // Changed from Date to string since SQL uses "time without time zone"
-  home_team: string;
-  away_team: string;
-  half_time_home_goals: number | null;
-  half_time_away_goals: number | null;
-  full_time_home_goals: number;
-  full_time_away_goals: number;
-  match_status?: 'completed' | 'scheduled' | 'cancelled' | 'postponed';
-  btts_computed: boolean;
-  comeback_computed: boolean;
-  result_computed: 'H' | 'A' | 'D';
-  
-  // Keep these for compatibility with existing components
+  date: string | Date; // Support both string and Date types
   home: Team;
   away: Team;
   htScore: {
@@ -32,7 +19,65 @@ export interface Match {
   };
   btts: boolean;
   comeback: boolean;
-  date?: Date; // Keep this for backward compatibility
+  league?: string;
+  country?: string;
+  season?: string;
+  stats?: {
+    xg?: {
+      home?: number;
+      away?: number;
+    };
+    possession?: {
+      home?: number;
+      away?: number;
+    };
+    shots?: {
+      home?: number;
+      away?: number;
+    };
+    shotsOnTarget?: {
+      home?: number;
+      away?: number;
+    };
+    corners?: {
+      home?: number;
+      away?: number;
+    };
+    fouls?: {
+      home?: number;
+      away?: number;
+    };
+    cards?: {
+      yellow?: {
+        home?: number;
+        away?: number;
+      };
+      red?: {
+        home?: number;
+        away?: number;
+      };
+    };
+    odds?: {
+      home?: number;
+      draw?: number;
+      away?: number;
+    };
+  };
+  
+  // Support for database fields
+  match_time?: string;
+  home_team_id?: string;
+  away_team_id?: string;
+  home_team?: string;
+  away_team?: string;
+  half_time_home_goals?: number;
+  half_time_away_goals?: number;
+  full_time_home_goals?: number;
+  full_time_away_goals?: number;
+  match_status?: 'completed' | 'scheduled' | 'cancelled' | 'postponed';
+  btts_computed?: boolean;
+  comeback_computed?: boolean;
+  result_computed?: 'H' | 'A' | 'D';
 }
 
 export interface MatchStats {

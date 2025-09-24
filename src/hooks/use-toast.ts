@@ -1,192 +1,153 @@
+import React, { createContext, useContext, useState } from 'react';
+import { addToast as heroUIAddToast } from '@heroui/react';
 
-import React from "react"
+// Toast types
+export type ToastType = 'info' | 'success' | 'warning' | 'error';
 
-import type {
-  ToastActionElement,
-  ToastProps,
-} from "@/components/ui/toast"
-
-const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
-
-type ToasterToast = ToastProps & {
-  id: string
-  title?: React.ReactNode
-  description?: React.ReactNode
-  action?: ToastActionElement
+// Toast interface
+export interface Toast {
+  id: string;
+  title: string;
+  description?: string;
+  type: ToastType;
+  duration?: number;
 }
 
-const actionTypes = {
-  ADD_TOAST: "ADD_TOAST",
-  UPDATE_TOAST: "UPDATE_TOAST",
-  DISMISS_TOAST: "DISMISS_TOAST",
-  REMOVE_TOAST: "REMOVE_TOAST",
-} as const
-
-let count = 0
-
-function genId() {
-  count = (count + 1) % Number.MAX_SAFE_INTEGER
-  return count.toString()
+// Toast context interface
+interface ToastContextType {
+  toasts: Toast[];
+  showToast: (toast: Omit<Toast, 'id'>) => void;
+  hideToast: (id: string) => void;
+  hideAllToasts: () => void;
 }
 
-type ActionType = typeof actionTypes
+// Create context
+const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
-type Action =
-  | {
-      type: ActionType["ADD_TOAST"]
-      toast: ToasterToast
-    }
-  | {
-      type: ActionType["UPDATE_TOAST"]
-      toast: Partial<ToasterToast>
-    }
-  | {
-      type: ActionType["DISMISS_TOAST"]
-      toastId?: ToasterToast["id"]
-    }
-  | {
-      type: ActionType["REMOVE_TOAST"]
-      toastId?: ToasterToast["id"]
-    }
-
-interface State {
-  toasts: ToasterToast[]
+// Toast provider props
+interface ToastProviderProps {
+  children: React.ReactNode;
 }
 
-const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
+// Generate unique ID
+const generateId = () => `toast-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-const addToRemoveQueue = (toastId: string) => {
-  if (toastTimeouts.has(toastId)) {
-    return
+// Map toast type to HeroUI severity
+const mapTypeToSeverity = (type: ToastType) => {
+  switch (type) {
+    case 'success':
+      return 'success';
+    case 'warning':
+      return 'warning';
+    case 'error':
+      return 'danger';
+    case 'info':
+    default:
+      return 'primary';
   }
+};
 
-  const timeout = setTimeout(() => {
-    toastTimeouts.delete(toastId)
-    dispatch({
-      type: "REMOVE_TOAST",
-      toastId: toastId,
-    })
-  }, TOAST_REMOVE_DELAY)
-
-  toastTimeouts.set(toastId, timeout)
-}
-
-export const reducer = (state: State, action: Action): State => {
-  switch (action.type) {
-    case "ADD_TOAST":
-      return {
-        ...state,
-        toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
-      }
-
-    case "UPDATE_TOAST":
-      return {
-        ...state,
-        toasts: state.toasts.map((t) =>
-          t.id === action.toast.id ? { ...t, ...action.toast } : t
-        ),
-      }
-
-    case "DISMISS_TOAST": {
-      const { toastId } = action
-
-      // ! Side effects ! - This could be extracted into a dismissToast() action,
-      // but I'll keep it here for simplicity
-      if (toastId) {
-        addToRemoveQueue(toastId)
-      } else {
-        state.toasts.forEach((toast) => {
-          addToRemoveQueue(toast.id)
-        })
-      }
-
-      return {
-        ...state,
-        toasts: state.toasts.map((t) =>
-          t.id === toastId || toastId === undefined
-            ? {
-                ...t,
-                open: false,
-              }
-            : t
-        ),
-      }
-    }
-    case "REMOVE_TOAST":
-      if (action.toastId === undefined) {
-        return {
-          ...state,
-          toasts: [],
-        }
-      }
-      return {
-        ...state,
-        toasts: state.toasts.filter((t) => t.id !== action.toastId),
-      }
+// Map toast type to icon
+const mapTypeToIcon = (type: ToastType) => {
+  switch (type) {
+    case 'success':
+      return 'lucide:check-circle';
+    case 'warning':
+      return 'lucide:alert-triangle';
+    case 'error':
+      return 'lucide:x-circle';
+    case 'info':
+    default:
+      return 'lucide:info';
   }
-}
+};
 
-const listeners: Array<(state: State) => void> = []
+// Toast provider component
+export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
-let memoryState: State = { toasts: [] }
+  // Show toast
+  const showToast = (toast: Omit<Toast, 'id'>) => {
+    const id = generateId();
+    const newToast = { ...toast, id };
+    
+    // Add to internal state
+    setToasts((prevToasts) => [...prevToasts, newToast]);
+    
+    // Use HeroUI toast
+    heroUIAddToast({
+      title: toast.title,
+      description: toast.description,
+      icon: mapTypeToIcon(toast.type),
+      severity: mapTypeToSeverity(toast.type),
+      timeout: toast.duration || 5000,
+      shouldShowTimeoutProgress: true,
+      onClose: () => hideToast(id)
+    });
+    
+    // Auto-hide after duration
+    if (toast.duration !== Infinity) {
+      setTimeout(() => {
+        hideToast(id);
+      }, toast.duration || 5000);
+    }
+    
+    return id;
+  };
 
-function dispatch(action: Action) {
-  memoryState = reducer(memoryState, action)
-  listeners.forEach((listener) => {
-    listener(memoryState)
-  })
-}
+  // Hide toast
+  const hideToast = (id: string) => {
+    setToasts((prevToasts) => prevToasts.filter((toast) => toast.id !== id));
+  };
 
-type Toast = Omit<ToasterToast, "id">
+  // Hide all toasts
+  const hideAllToasts = () => {
+    setToasts([]);
+  };
 
-function toast({ ...props }: Toast) {
-  const id = genId()
+  return (
+    <ToastContext.Provider value={{ toasts, showToast, hideToast, hideAllToasts }}>
+      {children}
+    </ToastContext.Provider>
+  );
+};
 
-  const update = (props: ToasterToast) =>
-    dispatch({
-      type: "UPDATE_TOAST",
-      toast: { ...props, id },
-    })
-  const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
-
-  dispatch({
-    type: "ADD_TOAST",
-    toast: {
-      ...props,
-      id,
-      open: true,
-      onOpenChange: (open) => {
-        if (!open) dismiss()
+// Custom hook to use toast
+export const useToast = () => {
+  const context = useContext(ToastContext);
+  
+  if (context === undefined) {
+    // Fallback implementation if used outside provider
+    return {
+      toasts: [],
+      showToast: (toast: Omit<Toast, 'id'>) => {
+        console.warn('useToast used outside of ToastProvider, falling back to HeroUI toast');
+        heroUIAddToast({
+          title: toast.title,
+          description: toast.description,
+          icon: mapTypeToIcon(toast.type),
+          severity: mapTypeToSeverity(toast.type),
+          timeout: toast.duration || 5000,
+          shouldShowTimeoutProgress: true
+        });
+        return generateId();
       },
-    },
-  })
-
-  return {
-    id: id,
-    dismiss,
-    update,
+      hideToast: () => {},
+      hideAllToasts: () => {}
+    };
   }
-}
+  
+  return context;
+};
 
-function useToast() {
-  const [state, setState] = React.useState<State>(memoryState)
-
-  React.useEffect(() => {
-    listeners.push(setState)
-    return () => {
-      const index = listeners.indexOf(setState)
-      if (index > -1) {
-        listeners.splice(index, 1)
-      }
-    }
-  }, [state])
-
-  return {
-    ...state,
-    toast,
-    dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
-  }
-}
-
-export { useToast, toast }
+// Hook to create a toast outside of React components
+export const createToast = (toast: Omit<Toast, 'id'>) => {
+  heroUIAddToast({
+    title: toast.title,
+    description: toast.description,
+    icon: mapTypeToIcon(toast.type),
+    severity: mapTypeToSeverity(toast.type),
+    timeout: toast.duration || 5000,
+    shouldShowTimeoutProgress: true
+  });
+};
