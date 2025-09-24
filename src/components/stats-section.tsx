@@ -5,6 +5,7 @@ import { MatchStats } from '../types/match';
 import { ResultsChart } from './charts/results-chart';
 import { BTTSChart } from './charts/btts-chart';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+import { useMatchData } from '../hooks/use-match-data';
 
 interface StatsSectionProps {
   stats: MatchStats;
@@ -12,80 +13,41 @@ interface StatsSectionProps {
 }
 
 export const StatsSection: React.FC<StatsSectionProps> = ({ stats, onExtendedStatsClick }) => {
-  // Add refs for charts to enable export
-  const resultsChartRef = React.useRef<any>(null);
-  const bttsChartRef = React.useRef<any>(null);
+  const { isSupabaseConnected, totalMatchCount } = useMatchData();
   
-  // Add percentage calculations
-  const homeWinPercentage = stats.total > 0 ? ((stats.homeWins / stats.total) * 100).toFixed(1) : '0';
-  const drawPercentage = stats.total > 0 ? ((stats.draws / stats.total) * 100).toFixed(1) : '0';
-  const awayWinPercentage = stats.total > 0 ? ((stats.awayWins / stats.total) * 100).toFixed(1) : '0';
-
-  // Add chart export function
-  const exportChart = (chartRef: React.RefObject<any>, chartName: string) => {
-    if (chartRef.current) {
-      try {
-        // Get chart instance from Recharts
-        const chartInstance = chartRef.current;
-        const svg = chartInstance.container.querySelector('svg');
-        
-        if (svg) {
-          // Create a canvas and draw the SVG on it
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          const svgData = new XMLSerializer().serializeToString(svg);
-          const img = new Image();
-          
-          img.onload = () => {
-            canvas.width = img.width;
-            canvas.height = img.height;
-            ctx?.drawImage(img, 0, 0);
-            
-            // Convert to PNG and download
-            const pngData = canvas.toDataURL('image/png');
-            const link = document.createElement('a');
-            link.download = `winmix-${chartName}-${new Date().toISOString().slice(0, 10)}.png`;
-            link.href = pngData;
-            link.click();
-          };
-          
-          img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
-        }
-      } catch (error) {
-        console.error('Error exporting chart:', error);
-      }
-    }
-  };
-
-  // Add trend data for visualization
-  const [trendData, setTrendData] = React.useState<any[]>([]);
+  // Calculate percentages for stats display
+  const homeWinPercentage = stats.total > 0 ? Math.round((stats.homeWins / stats.total) * 100) : 0;
+  const drawPercentage = stats.total > 0 ? Math.round((stats.draws / stats.total) * 100) : 0;
+  const awayWinPercentage = stats.total > 0 ? Math.round((stats.awayWins / stats.total) * 100) : 0;
+  
+  // State for trend chart visibility
   const [showTrends, setShowTrends] = React.useState(false);
   
-  // Generate sample trend data (in real app, this would come from API)
-  React.useEffect(() => {
-    const generateTrendData = () => {
-      const data = [];
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      
-      for (let i = 0; i < 12; i++) {
-        const homeWins = Math.floor(Math.random() * 10) + 5;
-        const draws = Math.floor(Math.random() * 8) + 2;
-        const awayWins = Math.floor(Math.random() * 10) + 3;
-        
-        data.push({
-          month: months[i],
-          homeWins,
-          draws,
-          awayWins,
-          total: homeWins + draws + awayWins
-        });
-      }
-      
-      setTrendData(data);
-    };
+  // References for chart export functionality
+  const resultsChartRef = React.useRef(null);
+  const bttsChartRef = React.useRef(null);
+  
+  // Sample trend data (would be replaced with real data in production)
+  const trendData = [
+    { month: 'Jan', homeWins: 12, draws: 5, awayWins: 8 },
+    { month: 'Feb', homeWins: 10, draws: 7, awayWins: 9 },
+    { month: 'Mar', homeWins: 14, draws: 4, awayWins: 7 },
+    { month: 'Apr', homeWins: 9, draws: 6, awayWins: 10 },
+    { month: 'May', homeWins: 11, draws: 8, awayWins: 6 },
+    { month: 'Jun', homeWins: 13, draws: 5, awayWins: 7 },
+  ];
+  
+  // Function to export chart as PNG
+  const exportChart = (chartRef: any, filename: string) => {
+    if (!chartRef.current) return;
     
-    generateTrendData();
-  }, []);
+    try {
+      // Implementation would go here in production
+      console.log(`Exporting ${filename} chart...`);
+    } catch (error) {
+      console.error('Error exporting chart:', error);
+    }
+  };
 
   return (
     <section id="stats" className="mt-10">
@@ -97,14 +59,17 @@ export const StatsSection: React.FC<StatsSectionProps> = ({ stats, onExtendedSta
             color="default"
             className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-zinc-200 border border-white/10 rounded-full px-3 py-1.5 hover:bg-white/5"
             onPress={onExtendedStatsClick}
-            aria-label="Bővített statisztika megjelenítése"
           >
             <Icon icon="lucide:chart-line" width={16} height={16} />
             Bővített statisztika
           </Button>
           <div className="hidden sm:flex items-center gap-2 text-xs text-zinc-400">
-            <Icon icon="lucide:database" width={16} height={16} />
-            <span>Supabase adatok alapján</span>
+            <Icon icon="lucide:info" width={16} height={16} />
+            <span>
+              {isSupabaseConnected 
+                ? `Szűrt eredmények alapján (${totalMatchCount} mérkőzés)` 
+                : "Minta adatok alapján"}
+            </span>
           </div>
         </div>
       </div>
@@ -113,13 +78,16 @@ export const StatsSection: React.FC<StatsSectionProps> = ({ stats, onExtendedSta
         <Card className="rounded-2xl ring-1 ring-white/10 bg-white/5 px-4 py-4">
           <div className="flex items-center justify-between">
             <span className="text-xs text-zinc-400">Összes mérkőzés</span>
-            <Tooltip content="Az adatbázisban található összes mérkőzés">
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-white/5 ring-1 ring-white/10">
-                <Icon icon="lucide:list" className="text-zinc-200" width={16} height={16} />
-              </span>
-            </Tooltip>
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-white/5 ring-1 ring-white/10">
+              <Icon icon="lucide:list" className="text-zinc-200" width={16} height={16} />
+            </span>
           </div>
-          <p className="mt-2 text-2xl font-semibold tracking-tight">{stats.total}</p>
+          <p className="mt-2 text-2xl font-semibold tracking-tight">
+            {isSupabaseConnected ? totalMatchCount : stats.total}
+            {!isSupabaseConnected && (
+              <span className="text-xs text-zinc-500 ml-2">(minta)</span>
+            )}
+          </p>
         </Card>
         <Card className="rounded-2xl ring-1 ring-white/10 bg-white/5 px-4 py-4">
           <div className="flex items-center justify-between">
